@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: apais-postgres
+    environment:
+      POSTGRES_USER: apais_user
+      POSTGRES_PASSWORD: apais_password
+      POSTGRES_DB: apais_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  postgres_data:

@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 5. CORE DATA ENTITIES
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String // Hashed
+  role          Role      @default(STUDENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  enrollments   Enrollment[]
+  tasks         Task[]
+  declaredMisses DeclaredMiss[]
+}
+
+// Academic Structure
+model School {
+  id          String       @id @default(cuid())
+  name        String
+  departments Department[]
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  courses   Course[]
+}
+
+model Level {
+  id      String   @id @default(cuid())
+  name    String   // e.g., "200 Level"
+  courses Course[]
+}
+
+model Semester {
+  id        String           @id @default(cuid())
+  name      String           // e.g., "First Semester 2025/2026"
+  isActive  Boolean          @default(false)
+  offerings CourseOffering[]
+}
+
+model Course {
+  id           String           @id @default(cuid())
+  code         String           @unique // e.g., "COSC 201"
+  title        String
+  credits      Int
+  departmentId String
+  department   Department       @relation(fields: [departmentId], references: [id])
+  levelId      String
+  level        Level            @relation(fields: [levelId], references: [id])
+  offerings    CourseOffering[]
+}
+
+model CourseOffering {
+  id                 String              @id @default(cuid())
+  courseId           String
+  course             Course              @relation(fields: [courseId], references: [id])
+  semesterId         String
+  semester           Semester            @relation(fields: [semesterId], references: [id])
+  
+  // Configuration per offering (allows overrides, but usually defaults)
+  requiredAttendance Float               @default(0.75) // Fraction 0-1
+  attendanceBuffer   Float               @default(0.10) // Fraction 0-1
+
+  enrollments        Enrollment[]
+  sessions           AttendanceSession[]
+  
+  createdAt          DateTime            @default(now())
+}
+
+model Enrollment {
+  id               String         @id @default(cuid())
+  studentId        String
+  student          User           @relation(fields: [studentId], references: [id])
+  offeringId       String
+  offering         CourseOffering @relation(fields: [offeringId], references: [id])
+  
+  createdAt        DateTime       @default(now())
+
+  @@unique([studentId, offeringId])
+}
+
+model AttendanceSession {
+  id               String         @id @default(cuid())
+  offeringId       String
+  offering         CourseOffering @relation(fields: [offeringId], references: [id])
+  date             DateTime
+  isExtra          Boolean        @default(false) // e.g., optional tutorials
+  
+  declaredMisses   DeclaredMiss[]
+  
+  createdAt        DateTime       @default(now())
+}
+
+model DeclaredMiss {
+  id        String            @id @default(cuid())
+  sessionId String
+  session   AttendanceSession @relation(fields: [sessionId], references: [id])
+  studentId String
+  student   User              @relation(fields: [studentId], references: [id])
+  reason    String?
+  
+  createdAt DateTime          @default(now())
+
+  @@unique([sessionId, studentId])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     User     @relation(fields: [studentId], references: [id])
+  title       String
+  deadline    DateTime
+  importance  Int      // 1-10
+  isCompleted Boolean  @default(false)
+  
+  // Fit info? The PRD mentions "Effort Fit". 
+  // We'll calculate fit dynamically based on estimatedDuration? 
+  // PRD 8A.6: "Effort Fit represents whether the task fits the available time window." 
+  // Implies we need estimatedDuration.
+  estimatedDurationMinutes Int @default(60)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Admin Config
+model SystemConfig {
+  id                      String   @id @default(cuid())
+  
+  // Weights (Must sum to 1.0)
+  weightDeadline          Float    @default(0.4)
+  weightImportance        Float    @default(0.3)
+  weightNextClass         Float    @default(0.2)
+  weightEffortFit         Float    @default(0.1)
+
+  // Windows
+  deadlineWindowDays      Int      @default(14)
+  nextClassWindowHours    Int      @default(6)
+  
+  // Attendance Defaults
+  defaultRequirement      Float    @default(0.75)
+  defaultBuffer           Float    @default(0.10)
+
+  updatedAt               DateTime @updatedAt
+}
