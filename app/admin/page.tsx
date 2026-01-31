@@ -14,7 +14,7 @@ export default async function AdminPage() {
     // We'll let the action check it or redirect if not present.
     // Assuming middleware handles basic auth, but role check is specific.
     if (!session || (session.user as any).role !== 'ADMIN') {
-        redirect('/dashboard') // Kick non-admins out
+        redirect('/dashboard') // Kick non admins out
     }
 
     const config = await getSystemConfig()
